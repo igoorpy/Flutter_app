@@ -11,107 +11,172 @@ class CalculadoraApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      title: 'Calculadora Lab 3',
-      theme: ThemeData(primarySwatch: Colors.blue),
-      home: const CalculadoraPage(),
+      title: 'Calculadora Interativa',
+      theme: ThemeData(
+        brightness: Brightness.dark,
+        scaffoldBackgroundColor: const Color(0xFF17171C),
+        useMaterial3: true,
+      ),
+      home: const CalculadoraScreen(),
     );
   }
 }
 
-class CalculadoraPage extends StatefulWidget {
-  const CalculadoraPage({super.key});
+class CalculadoraScreen extends StatefulWidget {
+  const CalculadoraScreen({super.key});
 
   @override
-  State<CalculadoraPage> createState() => _CalculadoraPageState();
+  State<CalculadoraScreen> createState() => _CalculadoraScreenState();
 }
 
-class _CalculadoraPageState extends State<CalculadoraPage> {
-  String _output = "0";
-  String _input = "";
-  double num1 = 0;
-  double num2 = 0;
-  String operand = "";
+class _CalculadoraScreenState extends State<CalculadoraScreen> {
+  String _display = '0';
+  String _expressaoEmAndamento = '';
+  double? _primeiroNumero;
+  String? _operador;
+  bool _novoNumero = true;
+  final List<String> _historico = [];
 
-  void buttonPressed(String buttonText) {
-    if (buttonText == "C") {
-      _input = "";
-      _output = "0";
-      num1 = 0;
-      num2 = 0;
-      operand = "";
-    } else if (buttonText == "+" ||
-        buttonText == "-" ||
-        buttonText == "/" ||
-        buttonText == "X") {
-      if (_input.isNotEmpty) {
-        num1 = double.parse(_input);
-      } else if (_output != "0") {
-        num1 = double.parse(_output);
-      }
-      operand = buttonText;
-      _input = "";
-    } else if (buttonText == ".") {
-      if (!_input.contains(".")) {
-        if (_input.isEmpty) {
-          _input = "0.";
+  void _onPressionarBotao(String texto) {
+    setState(() {
+      if (texto == 'C') {
+        _display = '0';
+        _expressaoEmAndamento = '';
+        _primeiroNumero = null;
+        _operador = null;
+        _novoNumero = true;
+      } else if (texto == '⌫') {
+        if (_display.length > 1) {
+          _display = _display.substring(0, _display.length - 1);
         } else {
-          _input = _input + buttonText;
+          _display = '0';
+          _novoNumero = true;
         }
-      }
-      _output = _input;
-    } else if (buttonText == "=") {
-      if (_input.isNotEmpty && operand.isNotEmpty) {
-        num2 = double.parse(_input);
+      } else if (texto == '%') {
+        double valor = double.tryParse(_display.replaceAll(',', '.')) ?? 0;
+        valor = valor / 100;
+        _display = _formatarNumero(valor);
+      } else if (texto == '+' || texto == '-' || texto == '×' || texto == '÷') {
+        double valorAtual = double.tryParse(_display.replaceAll(',', '.')) ?? 0;
 
-        if (operand == "+") {
-          _output = (num1 + num2).toString();
-        }
-        if (operand == "-") {
-          _output = (num1 - num2).toString();
-        }
-        if (operand == "X") {
-          _output = (num1 * num2).toString();
-        }
-        if (operand == "/") {
-          _output = num2 != 0 ? (num1 / num2).toString() : "Erro";
+        if (_primeiroNumero != null && _operador != null && !_novoNumero) {
+          _calcularResultadoParcial(valorAtual);
+        } else {
+          _primeiroNumero = valorAtual;
         }
 
-        // Remove o .0 do final se for número inteiro
-        if (_output.endsWith(".0")) {
-          _output = _output.substring(0, _output.length - 2);
-        }
+        _operador = texto;
+        _expressaoEmAndamento = '${_formatarNumero(_primeiroNumero!)} $texto ';
+        _novoNumero = true;
+      } else if (texto == '=') {
+        if (_primeiroNumero != null && _operador != null) {
+          double segundoNumero =
+              double.tryParse(_display.replaceAll(',', '.')) ?? 0;
+          double resultado = 0;
 
-        num1 = 0;
-        num2 = 0;
-        operand = "";
-        _input = "";
-      }
-    } else {
-      if (_input == "0") {
-        _input = buttonText;
+          switch (_operador) {
+            case '+':
+              resultado = _primeiroNumero! + segundoNumero;
+              break;
+            case '-':
+              resultado = _primeiroNumero! - segundoNumero;
+              break;
+            case '×':
+              resultado = _primeiroNumero! * segundoNumero;
+              break;
+            case '÷':
+              resultado = segundoNumero != 0
+                  ? _primeiroNumero! / segundoNumero
+                  : 0;
+              break;
+          }
+
+          String num1Str = _formatarNumero(_primeiroNumero!);
+          String num2Str = _formatarNumero(segundoNumero);
+          String resStr = _formatarNumero(resultado);
+
+          String operacaoCompleta = '$num1Str $_operador $num2Str = $resStr';
+          _historico.insert(0, operacaoCompleta);
+
+          _expressaoEmAndamento = '$num1Str $_operador $num2Str =';
+          _display = resStr;
+          _primeiroNumero = null;
+          _operador = null;
+          _novoNumero = true;
+        }
       } else {
-        _input = _input + buttonText;
-      }
-      _output = _input;
-    }
+        if (_novoNumero) {
+          _display = texto == ',' ? '0,' : texto;
+          _novoNumero = false;
+        } else {
+          if (texto == ',' && _display.contains(',')) return;
+          _display += texto;
+        }
 
-    setState(() {});
+        if (_operador != null && _primeiroNumero != null) {
+          _expressaoEmAndamento =
+              '${_formatarNumero(_primeiroNumero!)} $_operador $_display';
+        }
+      }
+    });
   }
 
-  Widget buildButton(String buttonText, Color color) {
+  void _calcularResultadoParcial(double segundoNumero) {
+    double resultado = 0;
+    switch (_operador) {
+      case '+':
+        resultado = _primeiroNumero! + segundoNumero;
+        break;
+      case '-':
+        resultado = _primeiroNumero! - segundoNumero;
+        break;
+      case '×':
+        resultado = _primeiroNumero! * segundoNumero;
+        break;
+      case '÷':
+        resultado = segundoNumero != 0 ? _primeiroNumero! / segundoNumero : 0;
+        break;
+    }
+    _primeiroNumero = resultado;
+    _display = _formatarNumero(resultado);
+  }
+
+  String _formatarNumero(double valor) {
+    if (valor % 1 == 0) {
+      return valor.toInt().toString();
+    }
+    return valor.toStringAsFixed(2).replaceAll('.', ',');
+  }
+
+  void _limparHistorico() {
+    setState(() {
+      _historico.clear();
+    });
+  }
+
+  Widget _criarBotao(
+    String texto, {
+    Color? corFundo,
+    Color? corTexto,
+    int flex = 1,
+  }) {
     return Expanded(
-      child: Container(
-        margin: const EdgeInsets.all(4.0),
+      flex: flex,
+      child: Padding(
+        padding: const EdgeInsets.all(5.0),
         child: ElevatedButton(
           style: ElevatedButton.styleFrom(
-            padding: const EdgeInsets.all(24.0),
-            backgroundColor: color,
-            foregroundColor: Colors.white,
+            backgroundColor: corFundo ?? const Color(0xFF2E2F38),
+            foregroundColor: corTexto ?? Colors.white,
+            padding: const EdgeInsets.symmetric(vertical: 20),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+            ),
           ),
-          onPressed: () => buttonPressed(buttonText),
+          onPressed: () => _onPressionarBotao(texto),
           child: Text(
-            buttonText,
-            style: const TextStyle(fontSize: 20.0, fontWeight: FontWeight.bold),
+            texto,
+            style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
           ),
         ),
       ),
@@ -122,63 +187,162 @@ class _CalculadoraPageState extends State<CalculadoraPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Calculadora Flutter - Lab 3'),
+        title: const Text('Calculadora'),
         centerTitle: true,
+        backgroundColor: const Color(0xFF17171C),
+        actions: [
+          IconButton(
+            tooltip: 'Limpar Histórico',
+            icon: const Icon(Icons.delete_outline, color: Colors.orangeAccent),
+            onPressed: _limparHistorico,
+          ),
+        ],
       ),
       body: Column(
-        children: <Widget>[
-          Container(
-            alignment: Alignment.centerRight,
-            padding: const EdgeInsets.symmetric(
-              vertical: 24.0,
-              horizontal: 12.0,
-            ),
-            child: Text(
-              _output,
-              style: const TextStyle(
-                fontSize: 48.0,
-                fontWeight: FontWeight.bold,
+        children: [
+          // Painel do Histórico
+          Expanded(
+            flex: 2,
+            child: Container(
+              margin: const EdgeInsets.all(8),
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: const Color(0xFF2E2F38).withOpacity(0.4),
+                borderRadius: BorderRadius.circular(12),
               ),
+              child: _historico.isEmpty
+                  ? const Center(
+                      child: Text(
+                        'Histórico de operações vazio',
+                        style: TextStyle(color: Colors.grey, fontSize: 14),
+                      ),
+                    )
+                  : ListView.builder(
+                      itemCount: _historico.length,
+                      itemBuilder: (context, index) {
+                        return Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 2.0),
+                          child: Text(
+                            _historico[index],
+                            textAlign: TextAlign.right,
+                            style: const TextStyle(
+                              color: Colors.orangeAccent,
+                              fontSize: 16,
+                            ),
+                          ),
+                        );
+                      },
+                    ),
             ),
           ),
-          const Expanded(child: Divider()),
+
+          // Visor da Operação e Resultado
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+            alignment: Alignment.bottomRight,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Text(
+                  _expressaoEmAndamento.isEmpty ? ' ' : _expressaoEmAndamento,
+                  style: const TextStyle(
+                    fontSize: 22,
+                    color: Colors.orangeAccent,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  _display,
+                  style: const TextStyle(
+                    fontSize: 48,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          const Divider(color: Colors.grey),
+
+          // Teclado da Calculadora (Grade Uniforme 4x5)
           Column(
             children: [
               Row(
                 children: [
-                  buildButton("7", Colors.grey[800]!),
-                  buildButton("8", Colors.grey[800]!),
-                  buildButton("9", Colors.grey[800]!),
-                  buildButton("/", Colors.orange),
+                  _criarBotao(
+                    'C',
+                    corFundo: const Color(0xFF4E4E5A),
+                    corTexto: Colors.redAccent,
+                  ),
+                  _criarBotao(
+                    '⌫',
+                    corFundo: const Color(0xFF4E4E5A),
+                    corTexto: Colors.white,
+                  ),
+                  _criarBotao(
+                    '%',
+                    corFundo: const Color(0xFF4E4E5A),
+                    corTexto: Colors.white,
+                  ),
+                  _criarBotao(
+                    '÷',
+                    corFundo: Colors.orangeAccent,
+                    corTexto: Colors.black,
+                  ),
                 ],
               ),
               Row(
                 children: [
-                  buildButton("4", Colors.grey[800]!),
-                  buildButton("5", Colors.grey[800]!),
-                  buildButton("6", Colors.grey[800]!),
-                  buildButton("X", Colors.orange),
+                  _criarBotao('7'),
+                  _criarBotao('8'),
+                  _criarBotao('9'),
+                  _criarBotao(
+                    '×',
+                    corFundo: Colors.orangeAccent,
+                    corTexto: Colors.black,
+                  ),
                 ],
               ),
               Row(
                 children: [
-                  buildButton("1", Colors.grey[800]!),
-                  buildButton("2", Colors.grey[800]!),
-                  buildButton("3", Colors.grey[800]!),
-                  buildButton("-", Colors.orange),
+                  _criarBotao('4'),
+                  _criarBotao('5'),
+                  _criarBotao('6'),
+                  _criarBotao(
+                    '-',
+                    corFundo: Colors.orangeAccent,
+                    corTexto: Colors.black,
+                  ),
                 ],
               ),
               Row(
                 children: [
-                  buildButton(".", Colors.grey[800]!),
-                  buildButton("0", Colors.grey[800]!),
-                  buildButton("C", Colors.redAccent),
-                  buildButton("+", Colors.orange),
+                  _criarBotao('1'),
+                  _criarBotao('2'),
+                  _criarBotao('3'),
+                  _criarBotao(
+                    '+',
+                    corFundo: Colors.orangeAccent,
+                    corTexto: Colors.black,
+                  ),
                 ],
               ),
-              Row(children: [buildButton("=", Colors.green)]),
+              Row(
+                children: [
+                  _criarBotao('0', flex: 2),
+                  _criarBotao(','),
+                  _criarBotao(
+                    '=',
+                    corFundo: Colors.orangeAccent,
+                    corTexto: Colors.black,
+                  ),
+                ],
+              ),
             ],
           ),
+          const SizedBox(height: 10),
         ],
       ),
     );
